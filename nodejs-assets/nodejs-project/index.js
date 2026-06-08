@@ -12,6 +12,23 @@ console.log = function(...args) {
         rn_bridge.channel.post(JSON.stringify({ type: 'log', data: args.join(' ') }));
     }
 }
+const originalError = console.error;
+console.error = function(...args) {
+    originalError(...args);
+    if (rn_bridge && rn_bridge.channel) {
+        rn_bridge.channel.post(JSON.stringify({ type: 'log', data: '[ERROR] ' + args.join(' ') }));
+    }
+}
+
+// Tangkap Fatal Crash
+process.on('uncaughtException', (err) => {
+    console.error('FATAL CRASH:', err.message);
+    console.error(err.stack);
+    if (rn_bridge && rn_bridge.channel) {
+        rn_bridge.channel.post(JSON.stringify({ type: 'log', data: '[FATAL ERROR] ' + err.message }));
+        rn_bridge.channel.post(JSON.stringify({ type: 'log', data: err.stack }));
+    }
+});
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
