@@ -6,6 +6,16 @@ const {getDefaultConfig, mergeConfig} = require('@react-native/metro-config');
  *
  * @type {import('metro-config').MetroConfig}
  */
-const config = {};
+const exclusionList = require('metro-config/src/defaults/exclusionList');
+
+const config = {
+  resolver: {
+    blockList: exclusionList([
+      /nodejs-assets\/.*/,
+      /android\/.*/,
+      /ios\/.*/
+    ])
+  }
+};
 
 module.exports = mergeConfig(getDefaultConfig(__dirname), config);
