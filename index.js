@@ -8,6 +8,29 @@ const path = require('path');
 const readline = require('readline');
 const { getValidToken } = require('./audit_system/jne_auth');
 
+// =====================================
+// FUNGSI HISTORY AUDIT (Cegah Double)
+// =====================================
+function markAudited(date, courierId) {
+    const file = path.join(__dirname, 'audit_system', 'Laporan', `history.json`);
+    let history = {};
+    if (fs.existsSync(file)) {
+        try { history = JSON.parse(fs.readFileSync(file)); } catch(e){}
+    }
+    if (!history[date]) history[date] = [];
+    if (!history[date].includes(courierId)) history[date].push(courierId);
+    fs.writeFileSync(file, JSON.stringify(history, null, 2));
+}
+
+function isAudited(date, courierId) {
+    const file = path.join(__dirname, 'audit_system', 'Laporan', `history.json`);
+    if (!fs.existsSync(file)) return false;
+    try {
+        let history = JSON.parse(fs.readFileSync(file));
+        return history[date] && history[date].includes(courierId);
+    } catch(e) { return false; }
+}
+
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 const question = (text) => new Promise((resolve) => rl.question(text, resolve));
 
@@ -214,12 +237,26 @@ async function connectToWhatsApp() {
                     await sock.sendMessage(chatId, { text: "❌ Belum ada akun yang closing hari ini!" });
                     return;
                 }
-                await sock.sendMessage(chatId, { text: `🚀 Memulai eksekusi massal untuk ${closing.length} akun...`, edit: statusMsg.key });
                 
-                for(let i = 0; i < closing.length; i++) {
-                    let id = closing[i];
-                    await sock.sendMessage(chatId, { text: `🔍 *[${i+1}/${closing.length}]* Sedang mengaudit kurir *${id}*...`, edit: statusMsg.key });
+                // Filter kurir yang BELUM diaudit hari ini
+                let toAudit = closing.filter(id => !isAudited(dateOnly, id));
+                
+                if (toAudit.length === 0) {
+                    await sock.sendMessage(chatId, { text: "✅ Seluruh akun yang closing hari ini SUDAH selesai diaudit semua! (Tidak ada proses double)" });
+                    return;
+                }
+                
+                let skipCount = closing.length - toAudit.length;
+                let skipMsg = skipCount > 0 ? ` (Melewati ${skipCount} kurir yang sudah)` : ``;
+                
+                await sock.sendMessage(chatId, { text: `🚀 Memulai eksekusi massal untuk ${toAudit.length} akun${skipMsg}...`, edit: statusMsg.key });
+                
+                for(let i = 0; i < toAudit.length; i++) {
+                    let id = toAudit[i];
+                    await sock.sendMessage(chatId, { text: `🔍 *[${i+1}/${toAudit.length}]* Sedang mengaudit kurir *${id}*...`, edit: statusMsg.key });
                     await new Promise(res => exec(`node auditor_utama.js ${id} ${dateOnly}`, {cwd: path.join(__dirname, 'audit_system')}, (err) => res()));
+                    
+                    markAudited(dateOnly, id); // Tandai sudah diaudit
                     
                     const pdfSukses = path.join(__dirname, 'audit_system', 'Laporan', dateOnly, `Audit_SUKSES_${id}.pdf`);
                     let dikirim = false;
@@ -228,7 +265,7 @@ async function connectToWhatsApp() {
                         dikirim = true;
                     }
                     if (!dikirim) {
-                        await sock.sendMessage(chatId, { text: `✅ Audit *${id}* Selesai! (Tidak ada pelanggaran / Bersih)` });
+                        await sock.sendMessage(chatId, { text: `✅ Audit *${id}* Selesai! (Bersih dari pelanggaran)` });
                     }
                 }
                 await sock.sendMessage(chatId, { text: `🎉 SEMUA AUDIT SELESAI DILAKSANAKAN!`, edit: statusMsg.key });
@@ -257,6 +294,9 @@ async function connectToWhatsApp() {
             
             await sock.sendMessage(chatId, { text: `🔍 *[3/3]* Membedah paket kurir *${actualCourierId}* dengan AI, mohon tunggu...`, edit: statusMsg.key });
             await new Promise(res => exec(`node auditor_utama.js ${actualCourierId} ${dateOnly}`, {cwd: path.join(__dirname, 'audit_system')}, (err) => res()));
+            
+            markAudited(dateOnly, actualCourierId); // Tandai sudah diaudit meskipun lewat manual
+            
             await sock.sendMessage(chatId, { text: `✅ Audit selesai untuk *${actualCourierId}*! Mengirimkan PDF hasil audit...`, edit: statusMsg.key });
             
             const pdfSukses = path.join(__dirname, 'audit_system', 'Laporan', dateOnly, `Audit_SUKSES_${actualCourierId}.pdf`);
