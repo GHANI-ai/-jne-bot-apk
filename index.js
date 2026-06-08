@@ -145,6 +145,16 @@ async function connectToWhatsApp() {
 
             // Cari ID Kurir yang sebenarnya
             let actualCourierId = param ? (nameToIdMap[param] || param) : null;
+            
+            // Parsing untuk pengecualian "/cek semua not A,B"
+            let actualExcludedIds = [];
+            if (param === "SEMUA" && args[1] && args[1].toUpperCase() === "NOT") {
+                const notString = args.slice(2).join("").toUpperCase(); // misal "PKU862,ARDIARTI"
+                actualExcludedIds = notString.split(",").map(s => {
+                    const cleanId = s.trim();
+                    return nameToIdMap[cleanId] || cleanId;
+                }).filter(s => s.length > 0);
+            }
 
             // 2. Lakukan Sinkronisasi dengan Orion menggunakan ID yang benar
             try {
@@ -238,22 +248,30 @@ async function connectToWhatsApp() {
                     return;
                 }
                 
-                // Filter kurir yang BELUM diaudit hari ini
-                let toAudit = closing.filter(id => !isAudited(dateOnly, id));
+                // Filter kurir yang BELUM diaudit hari ini DAN TIDAK di-exclude
+                let toAudit = closing.filter(id => {
+                    if (isAudited(dateOnly, id)) return false; // Ditolak karena sudah diaudit
+                    if (actualExcludedIds.includes(id)) return false; // Ditolak karena masuk daftar pengecualian (NOT)
+                    return true;
+                });
                 
                 if (toAudit.length === 0) {
-                    await sock.sendMessage(chatId, { text: "✅ Seluruh akun yang closing hari ini SUDAH selesai diaudit semua! (Tidak ada proses double)" });
+                    let textMsg = "✅ Seluruh akun yang closing hari ini SUDAH selesai diaudit semua! (Tidak ada proses double)";
+                    if (actualExcludedIds.length > 0) textMsg += "\n*Catatan:* Beberapa kurir dilewati karena Anda memintanya.";
+                    await sock.sendMessage(chatId, { text: textMsg });
                     return;
                 }
                 
                 let skipCount = closing.length - toAudit.length;
-                let skipMsg = skipCount > 0 ? ` (Melewati ${skipCount} kurir yang sudah)` : ``;
+                let skipMsg = skipCount > 0 ? ` (Melewati ${skipCount} kurir yang sudah/dilarang)` : ``;
                 
                 await sock.sendMessage(chatId, { text: `🚀 Memulai eksekusi massal untuk ${toAudit.length} akun${skipMsg}...`, edit: statusMsg.key });
                 
                 for(let i = 0; i < toAudit.length; i++) {
                     let id = toAudit[i];
-                    await sock.sendMessage(chatId, { text: `🔍 *[${i+1}/${toAudit.length}]* Sedang mengaudit kurir *${id}*...`, edit: statusMsg.key });
+                    let cName = couriersMap[id] ? couriersMap[id].name : id;
+                    
+                    await sock.sendMessage(chatId, { text: `🔍 *[${i+1}/${toAudit.length}]* Sedang mengaudit kurir *${cName}* (${id})...`, edit: statusMsg.key });
                     await new Promise(res => exec(`node auditor_utama.js ${id} ${dateOnly}`, {cwd: path.join(__dirname, 'audit_system')}, (err) => res()));
                     
                     markAudited(dateOnly, id); // Tandai sudah diaudit
@@ -265,7 +283,7 @@ async function connectToWhatsApp() {
                         dikirim = true;
                     }
                     if (!dikirim) {
-                        await sock.sendMessage(chatId, { text: `✅ Audit *${id}* Selesai! (Bersih dari pelanggaran)` });
+                        await sock.sendMessage(chatId, { text: `✅ Audit *${cName}* (${id}) Selesai! (Bersih dari pelanggaran)` });
                     }
                 }
                 await sock.sendMessage(chatId, { text: `🎉 SEMUA AUDIT SELESAI DILAKSANAKAN!`, edit: statusMsg.key });
@@ -292,12 +310,13 @@ async function connectToWhatsApp() {
                 return;
             }
             
-            await sock.sendMessage(chatId, { text: `🔍 *[3/3]* Membedah paket kurir *${actualCourierId}* dengan AI, mohon tunggu...`, edit: statusMsg.key });
+            let targetName = couriersMap[actualCourierId] ? couriersMap[actualCourierId].name : actualCourierId;
+            await sock.sendMessage(chatId, { text: `🔍 *[3/3]* Membedah paket kurir *${targetName}* (${actualCourierId}) dengan AI, mohon tunggu...`, edit: statusMsg.key });
             await new Promise(res => exec(`node auditor_utama.js ${actualCourierId} ${dateOnly}`, {cwd: path.join(__dirname, 'audit_system')}, (err) => res()));
             
             markAudited(dateOnly, actualCourierId); // Tandai sudah diaudit meskipun lewat manual
             
-            await sock.sendMessage(chatId, { text: `✅ Audit selesai untuk *${actualCourierId}*! Mengirimkan PDF hasil audit...`, edit: statusMsg.key });
+            await sock.sendMessage(chatId, { text: `✅ Audit selesai untuk *${targetName}* (${actualCourierId})! Mengirimkan PDF hasil audit...`, edit: statusMsg.key });
             
             const pdfSukses = path.join(__dirname, 'audit_system', 'Laporan', dateOnly, `Audit_SUKSES_${actualCourierId}.pdf`);
             
@@ -308,7 +327,7 @@ async function connectToWhatsApp() {
             }
             
             if (!dikirim) {
-                await sock.sendMessage(chatId, { text: `✅ LUAR BIASA! Seluruh paket SUKSES milik *${actualCourierId}* mematuhi SOP. Tidak ada PDF pelanggaran yang dicetak.` });
+                await sock.sendMessage(chatId, { text: `✅ LUAR BIASA! Seluruh paket SUKSES milik *${targetName}* (${actualCourierId}) mematuhi SOP. Tidak ada PDF pelanggaran yang dicetak.` });
             }
             
         } catch (error) {
