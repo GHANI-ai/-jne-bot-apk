@@ -149,10 +149,23 @@ async function connectToWhatsApp() {
             for(let p of data) {
                 if (!p.MRSHEET_COURIER_ID) continue;
                 const cid = p.MRSHEET_COURIER_ID;
-                if (!couriersMap[cid]) couriersMap[cid] = { total: 0, status: 'Closing' };
+                if (!couriersMap[cid]) couriersMap[cid] = { 
+                    total: 0, 
+                    status: 'Closing', 
+                    name: p.MRSHEET_COURIER_NAME || cid, 
+                    delivered: 0, 
+                    failed: 0,
+                    unprocessed: 0
+                };
+                
                 couriersMap[cid].total++;
                 if (!p.POD_STATUS || p.POD_STATUS.trim() === '') {
                     couriersMap[cid].status = 'On Process';
+                    couriersMap[cid].unprocessed++;
+                } else if (p.DRSHEET_STATUS && p.DRSHEET_STATUS.startsWith('D')) {
+                    couriersMap[cid].delivered++;
+                } else {
+                    couriersMap[cid].failed++;
                 }
             }
             
@@ -165,11 +178,27 @@ async function connectToWhatsApp() {
             
             // Perintah: /cek
             if (!param) {
-                let replyText = `🤖 *Status Kurir Hari Ini (${date})*\n\n`;
-                replyText += `✅ *SUDAH Closing:*\n${closing.length > 0 ? closing.join(', ') : 'Belum ada'}\n\n`;
-                replyText += `⏳ *BELUM Closing (On Process):*\n${belum.length > 0 ? belum.join(', ') : 'Tidak ada'}\n\n`;
-                replyText += `👉 Ketik */cek <id_kurir>* untuk audit.\n`;
-                replyText += `👉 Ketik */cek semua* untuk audit seluruh akun closing.`;
+                let replyText = `🤖 *Dashboard Kurir Hari Ini (${date})*\n\n`;
+                let closingText = "";
+                let onProcessText = "";
+
+                for(let cid in couriersMap) {
+                    let c = couriersMap[cid];
+                    let pctSukses = c.total > 0 ? Math.round((c.delivered / c.total) * 100) : 0;
+                    
+                    let statStr = `👤 *${c.name}* (${cid})\n📦 Total: ${c.total} Pkt | ✅ S: ${c.delivered} | ❌ G: ${c.failed} (${pctSukses}% Sukses)\n`;
+                    
+                    if (c.status === 'Closing') {
+                        closingText += statStr + `\n`;
+                    } else {
+                        onProcessText += statStr + `⏳ Sisa On Process: ${c.unprocessed} Pkt\n\n`;
+                    }
+                }
+
+                replyText += `🟢 *SUDAH CLOSING (Siap Audit):*\n${closingText || 'Belum ada\n'}\n`;
+                replyText += `🟡 *BELUM CLOSING (Masih Jalan):*\n${onProcessText || 'Tidak ada\n'}\n`;
+                replyText += `👉 Ketik */cek nama_kurir* untuk mengaudit.\n`;
+                replyText += `👉 Ketik */cek semua* untuk mengaudit seluruh akun closing.`;
                 await sock.sendMessage(chatId, { text: replyText });
                 return;
             }
@@ -207,7 +236,17 @@ async function connectToWhatsApp() {
                 return;
             }
             if (belum.includes(actualCourierId)) {
-                await sock.sendMessage(chatId, { text: `🛑 *DITOLAK!*\nKurir *${actualCourierId}* masih *On Process*. Tunggu sampai Closing.` });
+                let c = couriersMap[actualCourierId];
+                let pctSukses = c.total > 0 ? Math.round((c.delivered / c.total) * 100) : 0;
+                
+                let rejectMsg = `🛑 *AUDIT DITOLAK!*\nKurir *${c.name}* (${actualCourierId}) masih dalam status *On Process*.\n\n`;
+                rejectMsg += `📦 Total Paket: ${c.total}\n`;
+                rejectMsg += `✅ Sudah Sukses: ${c.delivered} (${pctSukses}%)\n`;
+                rejectMsg += `❌ Sudah Gagal: ${c.failed}\n`;
+                rejectMsg += `⏳ *Belum Diupdate: ${c.unprocessed}*\n\n`;
+                rejectMsg += `Harap tunggu kurir menyelesaikan sisa ${c.unprocessed} paketnya sebelum diaudit.`;
+                
+                await sock.sendMessage(chatId, { text: rejectMsg });
                 return;
             }
             
