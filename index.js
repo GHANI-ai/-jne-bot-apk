@@ -98,8 +98,13 @@ async function connectToWhatsApp() {
         try {
             let statusMsg = await sock.sendMessage(chatId, { text: "⏳ *[1/3]* Membaca memori data awal JNE..." }, { quoted: msg });
             const token = await getValidToken();
-            const date = new Date().toISOString().split('T')[0];
-            const url = `https://sca.jne.id/lm-api/dashboard/report?from=${date}&to=${date}&result_type=list`;
+            
+            const now = new Date();
+            const pad = n => n < 10 ? '0' + n : n;
+            const dateOnly = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+            const fullDateTime = `${dateOnly} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+            
+            const url = `https://sca.jne.id/lm-api/dashboard/report?from=${dateOnly}&to=${dateOnly}&result_type=list`;
             
             // 1. Tarik data awal untuk memetakan NAMA -> ID Kurir
             let response = await axios.get(url, { headers: { "Authorization": token } });
@@ -123,7 +128,7 @@ async function connectToWhatsApp() {
                 if (actualCourierId && actualCourierId !== "SEMUA") {
                     await sock.sendMessage(chatId, { text: `⏳ *[1/3]* Mensingkronkan data kurir *${actualCourierId}* dengan satelit JNE...`, edit: statusMsg.key });
                     await axios.post('https://sca.jne.id/lm-api/sync/delivery?refresh=true', 
-                        { from: date, to: date, couriers: [actualCourierId] }, 
+                        { from: fullDateTime, to: fullDateTime, couriers: [actualCourierId] }, 
                         { headers: { "Authorization": token }, timeout: 15000 }
                     );
                 } else {
@@ -131,7 +136,7 @@ async function connectToWhatsApp() {
                     const allIds = Object.values(nameToIdMap).filter((v, i, a) => a.indexOf(v) === i);
                     if (allIds.length > 0) {
                         await axios.post('https://sca.jne.id/lm-api/sync/delivery?refresh=true', 
-                            { from: date, to: date, couriers: allIds }, 
+                            { from: fullDateTime, to: fullDateTime, couriers: allIds }, 
                             { headers: { "Authorization": token }, timeout: 30000 }
                         );
                     }
@@ -178,7 +183,7 @@ async function connectToWhatsApp() {
             
             // Perintah: /cek
             if (!param) {
-                let replyText = `🤖 *Dashboard Kurir Hari Ini (${date})*\n\n`;
+                let replyText = `🤖 *Dashboard Kurir Hari Ini (${dateOnly})*\n\n`;
                 let closingText = "";
                 let onProcessText = "";
 
@@ -214,9 +219,9 @@ async function connectToWhatsApp() {
                 for(let i = 0; i < closing.length; i++) {
                     let id = closing[i];
                     await sock.sendMessage(chatId, { text: `🔍 *[${i+1}/${closing.length}]* Sedang mengaudit kurir *${id}*...`, edit: statusMsg.key });
-                    await new Promise(res => exec(`node auditor_utama.js ${id} ${date}`, {cwd: path.join(__dirname, 'audit_system')}, (err) => res()));
+                    await new Promise(res => exec(`node auditor_utama.js ${id} ${dateOnly}`, {cwd: path.join(__dirname, 'audit_system')}, (err) => res()));
                     
-                    const pdfSukses = path.join(__dirname, 'audit_system', 'Laporan', date, `Audit_SUKSES_${id}.pdf`);
+                    const pdfSukses = path.join(__dirname, 'audit_system', 'Laporan', dateOnly, `Audit_SUKSES_${id}.pdf`);
                     let dikirim = false;
                     if (fs.existsSync(pdfSukses)) {
                         await sock.sendMessage(chatId, { document: fs.readFileSync(pdfSukses), mimetype: 'application/pdf', fileName: `Audit_SUKSES_${id}.pdf` });
@@ -251,14 +256,14 @@ async function connectToWhatsApp() {
             }
             
             await sock.sendMessage(chatId, { text: `🔍 *[3/3]* Membedah paket kurir *${actualCourierId}* dengan AI, mohon tunggu...`, edit: statusMsg.key });
-            await new Promise(res => exec(`node auditor_utama.js ${actualCourierId} ${date}`, {cwd: path.join(__dirname, 'audit_system')}, (err) => res()));
+            await new Promise(res => exec(`node auditor_utama.js ${actualCourierId} ${dateOnly}`, {cwd: path.join(__dirname, 'audit_system')}, (err) => res()));
             await sock.sendMessage(chatId, { text: `✅ Audit selesai untuk *${actualCourierId}*! Mengirimkan PDF hasil audit...`, edit: statusMsg.key });
             
-            const pdfSukses = path.join(__dirname, 'audit_system', 'Laporan', date, `Audit_SUKSES_${actualCourierId}.pdf`);
+            const pdfSukses = path.join(__dirname, 'audit_system', 'Laporan', dateOnly, `Audit_SUKSES_${actualCourierId}.pdf`);
             
             let dikirim = false;
             if (fs.existsSync(pdfSukses)) {
-                await sock.sendMessage(chatId, { document: fs.readFileSync(pdfSukses), mimetype: 'application/pdf', fileName: `Audit_SUKSES_${param}.pdf` });
+                await sock.sendMessage(chatId, { document: fs.readFileSync(pdfSukses), mimetype: 'application/pdf', fileName: `Audit_SUKSES_${actualCourierId}.pdf` });
                 dikirim = true;
             }
             
