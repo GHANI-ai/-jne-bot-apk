@@ -89,15 +89,15 @@ async function periksaPelanggaran(resi, fotoFirstProveBuffer, fotoUtamaBuffer, f
     const prompt = statusType === 'SUKSES' 
     ? `Tugas: Audit Kepatuhan Kurir (Paket SUKSES).
        SYARAT SAH LOLOS AUDIT (Harus penuhi SALAH SATU jalur ini):
-       1. JALUR NORMAL: Ada gambar orang menerima barang. Syarat sah: WAJIB nampak kepala/wajah penerima dan paketnya. (Catatan: Perhatikan baik-baik, benda besar berbentuk kotak/silinder yang dipegang/berada di dekat orang adalah PAKET berukuran besar, bukan tiang/tembok. Jika paket sangat besar menutupi sebagian badan tapi terlihat jelas dipegang orang, maka SAH).
+       1. JALUR NORMAL: Ada gambar orang menerima barang. Syarat sah: WAJIB nampak bagian tubuh penerima (wajah/kepala/tangan) dan paketnya. (PENTING: SCAN SELURUH SUDUT GAMBAR! Terkadang orang berada di pojok kamera, agak gelap, atau paketnya sangat besar hingga menutupi separuh badan. Jika Anda melihat TANGAN manusia memegang paket, atau potongan wajah/kepala di sudut mana pun, maka itu SAH! Jangan buru-buru menyimpulkan "hanya foto paket" tanpa meneliti sekeliling paket).
        2. JALUR PIHAK KE-3 / KAPAL: Ada foto pengantaran via kapal/boat. (SAH tanpa wajah penerima).
        3. JALUR TITIP (SAFE PLACE): Jika paket ditaruh di box, meja, rak, pagar, atau lantai tanpa ada foto orang, TETAPI WAJIB ADA lampiran foto screenshot chat yang membuktikan adanya instruksi, persetujuan, atau laporan yang di-iyakan penerima (misal: "taruh aja di box bang", "oke", "siap", "sudah ditaruh ya"), maka itu SAH (Kesepakatan).
 
        PELANGGARAN: 
-       - Jika gambar HANYA paket digeletakkan (di lantai, box, meja, dsb) tanpa wajah penerima, DAN TIDAK ADA screenshot chat persetujuan/instruksi penitipan sama sekali, maka TIDAK SAH!
+       - Jika gambar BENAR-BENAR HANYA paket digeletakkan (di lantai, meja, dsb) tanpa ada potongan tubuh/orang sama sekali, DAN TIDAK ADA screenshot chat persetujuan, maka TIDAK SAH!
        - Jika ada screenshot chat tapi tidak nyambung atau tidak ada balasan persetujuan, TIDAK SAH.
        
-       Penting: Balas HANYA format JSON utuh: {"valid": true/false, "alasan": "JIKA valid=true biarkan KOSONG (''). JIKA valid=false tulis pelanggarannya SINGKAT (maks 5-7 kata), misal: 'Hanya paket, tidak ada persetujuan chat'."}`
+       Penting: Balas HANYA format JSON utuh: {"valid": true/false, "alasan": "JIKA valid=true biarkan KOSONG (''). JIKA valid=false tulis pelanggarannya SINGKAT (maks 5-7 kata), misal: 'Hanya paket, tidak ada orang/chat'."}`
        
     : `Tugas: Audit Kepatuhan Kurir (Paket GAGAL / Ambil Sendiri).
        Remarks (Alasan Gagal): "${remarks}".
