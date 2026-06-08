@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, SafeAreaView, StatusBar } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, SafeAreaView, StatusBar, Image } from 'react-native';
 import nodejs from 'nodejs-mobile-react-native';
-import QRCode from 'react-native-qrcode-svg';
 
 export default function App() {
   const [logs, setLogs] = useState(['[SYSTEM] Initializing JNE Bot Server...']);
@@ -58,7 +57,10 @@ export default function App() {
       {qrCode && (
         <View style={styles.qrContainer}>
           <View style={styles.qrWrapper}>
-            <QRCode value={qrCode} size={220} backgroundColor="white" />
+            <Image 
+              source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrCode)}` }} 
+              style={{ width: 220, height: 220 }} 
+            />
           </View>
           <Text style={styles.qrText}>SCAN QR UNTUK LOGIN WHATSAPP</Text>
         </View>
