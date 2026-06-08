@@ -96,34 +96,54 @@ async function connectToWhatsApp() {
         const chatId = msg.key.remoteJid;
 
         try {
-            let statusMsg = await sock.sendMessage(chatId, { text: "⏳ *[1/3]* Mensingkronkan data dengan satelit JNE..." }, { quoted: msg });
+            let statusMsg = await sock.sendMessage(chatId, { text: "⏳ *[1/3]* Membaca memori data awal JNE..." }, { quoted: msg });
             const token = await getValidToken();
             const date = new Date().toISOString().split('T')[0];
+            const url = `https://sca.jne.id/lm-api/dashboard/report?from=${date}&to=${date}&result_type=list`;
             
-            // 0. Lakukan Sinkronisasi dengan Orion terlebih dahulu
+            // 1. Tarik data awal untuk memetakan NAMA -> ID Kurir
+            let response = await axios.get(url, { headers: { "Authorization": token } });
+            let data = response.data.data || [];
+            
+            let nameToIdMap = {};
+            for(let p of data) {
+                if (p.MRSHEET_COURIER_ID) {
+                    nameToIdMap[p.MRSHEET_COURIER_ID.toUpperCase()] = p.MRSHEET_COURIER_ID.toUpperCase();
+                    if (p.MRSHEET_COURIER_NAME) {
+                        nameToIdMap[p.MRSHEET_COURIER_NAME.toUpperCase()] = p.MRSHEET_COURIER_ID.toUpperCase();
+                    }
+                }
+            }
+
+            // Cari ID Kurir yang sebenarnya
+            let actualCourierId = param ? (nameToIdMap[param] || param) : null;
+
+            // 2. Lakukan Sinkronisasi dengan Orion menggunakan ID yang benar
             try {
-                if (param && param !== "SEMUA") {
+                if (actualCourierId && actualCourierId !== "SEMUA") {
+                    await sock.sendMessage(chatId, { text: `⏳ *[1/3]* Mensingkronkan data kurir *${actualCourierId}* dengan satelit JNE...`, edit: statusMsg.key });
                     await axios.post('https://sca.jne.id/lm-api/sync/delivery?refresh=true', 
-                        { from: date, to: date, couriers: [param] }, 
+                        { from: date, to: date, couriers: [actualCourierId] }, 
                         { headers: { "Authorization": token }, timeout: 15000 }
                     );
                 } else {
-                    await axios.post('https://sca.jne.id/lm-api/sync/delivery/level', 
-                        { from: date, to: date, zone: 'PKU030' }, 
-                        { headers: { "Authorization": token }, timeout: 15000 }
-                    );
+                    await sock.sendMessage(chatId, { text: `⏳ *[1/3]* Mensingkronkan SELURUH kurir yang ada di memori hari ini...`, edit: statusMsg.key });
+                    const allIds = Object.values(nameToIdMap).filter((v, i, a) => a.indexOf(v) === i);
+                    if (allIds.length > 0) {
+                        await axios.post('https://sca.jne.id/lm-api/sync/delivery?refresh=true', 
+                            { from: date, to: date, couriers: allIds }, 
+                            { headers: { "Authorization": token }, timeout: 30000 }
+                        );
+                    }
                 }
             } catch (err) {
                 console.log("Sync Error:", err.message);
-                await sock.sendMessage(chatId, { text: "⚠️ Sinkronisasi lambat, menggunakan data cache terakhir.", edit: statusMsg.key });
             }
             
-            await sock.sendMessage(chatId, { text: "🔍 *[2/3]* Mencari status closing kurir hari ini...", edit: statusMsg.key });
-            
-            // Tarik data summary
-            const url = `https://sca.jne.id/lm-api/dashboard/report?from=${date}&to=${date}&result_type=list`;
-            const response = await axios.get(url, { headers: { "Authorization": token } });
-            const data = response.data.data || [];
+            // 3. Tarik data ulang SETELAH SINKRONISASI
+            await sock.sendMessage(chatId, { text: "🔍 *[2/3]* Mencari status closing kurir terbaru...", edit: statusMsg.key });
+            response = await axios.get(url, { headers: { "Authorization": token } });
+            data = response.data.data || [];
             
             let couriersMap = {};
             for(let p of data) {
@@ -182,20 +202,20 @@ async function connectToWhatsApp() {
             }
             
             // Perintah: /cek ID
-            if (!couriersMap[param]) {
-                await sock.sendMessage(chatId, { text: `❌ Kurir *${param}* tidak ditemukan hari ini.` });
+            if (!couriersMap[actualCourierId]) {
+                await sock.sendMessage(chatId, { text: `❌ Kurir *${actualCourierId}* tidak ditemukan hari ini.` });
                 return;
             }
-            if (belum.includes(param)) {
-                await sock.sendMessage(chatId, { text: `🛑 *DITOLAK!*\nKurir *${param}* masih *On Process*. Tunggu sampai Closing.` });
+            if (belum.includes(actualCourierId)) {
+                await sock.sendMessage(chatId, { text: `🛑 *DITOLAK!*\nKurir *${actualCourierId}* masih *On Process*. Tunggu sampai Closing.` });
                 return;
             }
             
-            await sock.sendMessage(chatId, { text: `🔍 *[3/3]* Membedah paket kurir *${param}* dengan AI, mohon tunggu...`, edit: statusMsg.key });
-            await new Promise(res => exec(`node auditor_utama.js ${param} ${date}`, {cwd: path.join(__dirname, 'audit_system')}, (err) => res()));
-            await sock.sendMessage(chatId, { text: `✅ Audit selesai untuk *${param}*! Mengirimkan PDF hasil audit...`, edit: statusMsg.key });
+            await sock.sendMessage(chatId, { text: `🔍 *[3/3]* Membedah paket kurir *${actualCourierId}* dengan AI, mohon tunggu...`, edit: statusMsg.key });
+            await new Promise(res => exec(`node auditor_utama.js ${actualCourierId} ${date}`, {cwd: path.join(__dirname, 'audit_system')}, (err) => res()));
+            await sock.sendMessage(chatId, { text: `✅ Audit selesai untuk *${actualCourierId}*! Mengirimkan PDF hasil audit...`, edit: statusMsg.key });
             
-            const pdfSukses = path.join(__dirname, 'audit_system', 'Laporan', date, `Audit_SUKSES_${param}.pdf`);
+            const pdfSukses = path.join(__dirname, 'audit_system', 'Laporan', date, `Audit_SUKSES_${actualCourierId}.pdf`);
             
             let dikirim = false;
             if (fs.existsSync(pdfSukses)) {
@@ -204,7 +224,7 @@ async function connectToWhatsApp() {
             }
             
             if (!dikirim) {
-                await sock.sendMessage(chatId, { text: `✅ LUAR BIASA! Seluruh paket SUKSES milik *${param}* mematuhi SOP. Tidak ada PDF pelanggaran yang dicetak.` });
+                await sock.sendMessage(chatId, { text: `✅ LUAR BIASA! Seluruh paket SUKSES milik *${actualCourierId}* mematuhi SOP. Tidak ada PDF pelanggaran yang dicetak.` });
             }
             
         } catch (error) {
