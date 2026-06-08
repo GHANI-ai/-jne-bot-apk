@@ -136,9 +136,11 @@ async function connectToWhatsApp() {
             let nameToIdMap = {};
             for(let p of data) {
                 if (p.MRSHEET_COURIER_ID) {
-                    nameToIdMap[p.MRSHEET_COURIER_ID.toUpperCase()] = p.MRSHEET_COURIER_ID.toUpperCase();
-                    if (p.MRSHEET_COURIER_NAME) {
-                        nameToIdMap[p.MRSHEET_COURIER_NAME.toUpperCase()] = p.MRSHEET_COURIER_ID.toUpperCase();
+                    const cid = p.MRSHEET_COURIER_ID.toUpperCase();
+                    nameToIdMap[cid] = cid;
+                    const cName = p.COURIER_NAME || p.MRSHEET_COURIER_NAME || p.DRSHEET_COURIER_NAME || p.courier_name;
+                    if (cName) {
+                        nameToIdMap[cName.toUpperCase()] = cid;
                     }
                 }
             }
@@ -190,7 +192,7 @@ async function connectToWhatsApp() {
                 if (!couriersMap[cid]) couriersMap[cid] = { 
                     total: 0, 
                     status: 'Closing', 
-                    name: p.MRSHEET_COURIER_NAME || cid, 
+                    name: p.COURIER_NAME || p.MRSHEET_COURIER_NAME || p.DRSHEET_COURIER_NAME || p.courier_name || cid, 
                     delivered: 0, 
                     failed: 0,
                     unprocessed: 0
@@ -224,7 +226,7 @@ async function connectToWhatsApp() {
                     let c = couriersMap[cid];
                     let pctSukses = c.total > 0 ? Math.round((c.delivered / c.total) * 100) : 0;
                     
-                    let statStr = `👤 *${c.name}* (${cid})\n📦 Total: ${c.total} Pkt | ✅ S: ${c.delivered} | ❌ G: ${c.failed} (${pctSukses}% Sukses)\n`;
+                    let statStr = `👤 *${cid}* (${c.name})\n📦 Total: ${c.total} Pkt | ✅ S: ${c.delivered} | ❌ G: ${c.failed} (${pctSukses}% Sukses)\n`;
                     
                     if (c.status === 'Closing') {
                         closingText += statStr + `\n`;
@@ -271,7 +273,7 @@ async function connectToWhatsApp() {
                     let id = toAudit[i];
                     let cName = couriersMap[id] ? couriersMap[id].name : id;
                     
-                    await sock.sendMessage(chatId, { text: `🔍 *[${i+1}/${toAudit.length}]* Sedang mengaudit kurir *${cName}* (${id})...`, edit: statusMsg.key });
+                    await sock.sendMessage(chatId, { text: `🔍 *[${i+1}/${toAudit.length}]* Sedang mengaudit kurir *${id}* (${cName})...`, edit: statusMsg.key });
                     await new Promise(res => exec(`node auditor_utama.js ${id} ${dateOnly}`, {cwd: path.join(__dirname, 'audit_system')}, (err) => res()));
                     
                     markAudited(dateOnly, id); // Tandai sudah diaudit
@@ -283,7 +285,7 @@ async function connectToWhatsApp() {
                         dikirim = true;
                     }
                     if (!dikirim) {
-                        await sock.sendMessage(chatId, { text: `✅ Audit *${cName}* (${id}) Selesai! (Bersih dari pelanggaran)` });
+                        await sock.sendMessage(chatId, { text: `✅ Audit *${id}* (${cName}) Selesai! (Bersih dari pelanggaran)` });
                     }
                 }
                 await sock.sendMessage(chatId, { text: `🎉 SEMUA AUDIT SELESAI DILAKSANAKAN!`, edit: statusMsg.key });
@@ -299,7 +301,7 @@ async function connectToWhatsApp() {
                 let c = couriersMap[actualCourierId];
                 let pctSukses = c.total > 0 ? Math.round((c.delivered / c.total) * 100) : 0;
                 
-                let rejectMsg = `🛑 *AUDIT DITOLAK!*\nKurir *${c.name}* (${actualCourierId}) masih dalam status *On Process*.\n\n`;
+                let rejectMsg = `🛑 *AUDIT DITOLAK!*\nKurir *${actualCourierId}* (${c.name}) masih dalam status *On Process*.\n\n`;
                 rejectMsg += `📦 Total Paket: ${c.total}\n`;
                 rejectMsg += `✅ Sudah Sukses: ${c.delivered} (${pctSukses}%)\n`;
                 rejectMsg += `❌ Sudah Gagal: ${c.failed}\n`;
@@ -311,12 +313,12 @@ async function connectToWhatsApp() {
             }
             
             let targetName = couriersMap[actualCourierId] ? couriersMap[actualCourierId].name : actualCourierId;
-            await sock.sendMessage(chatId, { text: `🔍 *[3/3]* Membedah paket kurir *${targetName}* (${actualCourierId}) dengan AI, mohon tunggu...`, edit: statusMsg.key });
+            await sock.sendMessage(chatId, { text: `🔍 *[3/3]* Membedah paket kurir *${actualCourierId}* (${targetName}) dengan AI, mohon tunggu...`, edit: statusMsg.key });
             await new Promise(res => exec(`node auditor_utama.js ${actualCourierId} ${dateOnly}`, {cwd: path.join(__dirname, 'audit_system')}, (err) => res()));
             
             markAudited(dateOnly, actualCourierId); // Tandai sudah diaudit meskipun lewat manual
             
-            await sock.sendMessage(chatId, { text: `✅ Audit selesai untuk *${targetName}* (${actualCourierId})! Mengirimkan PDF hasil audit...`, edit: statusMsg.key });
+            await sock.sendMessage(chatId, { text: `✅ Audit selesai untuk *${actualCourierId}* (${targetName})! Mengirimkan PDF hasil audit...`, edit: statusMsg.key });
             
             const pdfSukses = path.join(__dirname, 'audit_system', 'Laporan', dateOnly, `Audit_SUKSES_${actualCourierId}.pdf`);
             
@@ -327,7 +329,7 @@ async function connectToWhatsApp() {
             }
             
             if (!dikirim) {
-                await sock.sendMessage(chatId, { text: `✅ LUAR BIASA! Seluruh paket SUKSES milik *${targetName}* (${actualCourierId}) mematuhi SOP. Tidak ada PDF pelanggaran yang dicetak.` });
+                await sock.sendMessage(chatId, { text: `✅ LUAR BIASA! Seluruh paket SUKSES milik *${actualCourierId}* (${targetName}) mematuhi SOP. Tidak ada PDF pelanggaran yang dicetak.` });
             }
             
         } catch (error) {
