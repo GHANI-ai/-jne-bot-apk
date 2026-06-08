@@ -5,7 +5,11 @@ const { exec } = require('child_process');
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
+const readline = require('readline');
 const { getValidToken } = require('./audit_system/jne_auth');
+
+const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+const question = (text) => new Promise((resolve) => rl.question(text, resolve));
 
 async function connectToWhatsApp() {
     console.log("Memulai Bot Audit JNE Super Ringan...");
@@ -29,13 +33,33 @@ async function connectToWhatsApp() {
 
     sock.ev.on('creds.update', saveCreds);
 
+    if (!sock.authState.creds.registered) {
+        console.log('\n[INFO] Sesi login belum ditemukan.');
+        const phoneNumber = await question('Masukkan Nomor WhatsApp Bot (awali dengan 62, contoh: 62812345...): ');
+        const cleanNumber = phoneNumber.replace(/[^0-9]/g, '');
+        
+        setTimeout(async () => {
+            try {
+                const code = await sock.requestPairingCode(cleanNumber);
+                console.log(`\n=========================================`);
+                console.log(`🔐 KODE PAIRING ANDA: ${code}`);
+                console.log(`=========================================`);
+                console.log(`Langkah-langkah:`);
+                console.log(`1. Buka aplikasi WhatsApp`);
+                console.log(`2. Pilih menu "Perangkat Tertaut" (Linked Devices)`);
+                console.log(`3. Pilih "Tautkan dengan Nomor Telepon"`);
+                console.log(`4. Masukkan kode di atas`);
+                console.log(`=========================================\n`);
+            } catch (err) {
+                console.log('Gagal meminta Pairing Code:', err);
+            }
+        }, 3000);
+    }
+
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
         
-        if (qr) {
-            console.log('\n[!] SCAN QR CODE DI BAWAH INI MENGGUNAKAN WHATSAPP HP ANDA:\n');
-            qrcode.generate(qr, { small: true });
-        }
+        // Kita abaikan QR code karena sekarang menggunakan Pairing Code
         
         if (connection === 'close') {
             const statusCode = lastDisconnect.error?.output?.statusCode;
