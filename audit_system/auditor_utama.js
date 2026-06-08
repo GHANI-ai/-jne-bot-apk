@@ -78,7 +78,8 @@ async function periksaPelanggaran(resi, fotoFirstProveBuffer, fotoUtamaBuffer, f
 
     const prompt = `Tugas: Audit Kepatuhan Kurir (Paket SUKSES).
        SYARAT SAH LOLOS AUDIT (Harus penuhi SALAH SATU jalur ini):
-       1. JALUR NORMAL: Ada gambar orang menerima barang. Syarat sah: WAJIB nampak bagian tubuh penerima (wajah/kepala/tangan) dan paketnya. (PENTING: SCAN SELURUH SUDUT GAMBAR! Terkadang orang berada di pojok kamera, agak gelap, atau paketnya sangat besar hingga menutupi separuh badan. Jika Anda melihat TANGAN manusia memegang paket, atau potongan wajah/kepala di sudut mana pun, maka itu SAH! Jangan buru-buru menyimpulkan "hanya foto paket" tanpa meneliti sekeliling paket).
+       1. JALUR NORMAL: Ada gambar orang bersama barangnya. Syarat sah: WAJIB nampak KEPALA manusia penerima di dalam frame (TIDAK WAJIB nampak muka/wajah depan; boleh terlihat dari samping, belakang, atau tertutup helm). Paket harus terlihat dipegang atau berada bersama orang tersebut (contoh: kurir menyodorkan paket dan ada orang di depannya). 
+       [PERINGATAN KERAS]: Jika foto HANYA menampilkan TANGAN yang memegang paket tanpa terlihat kepala/badannya sama sekali, maka itu TIDAK SAH (Pelanggaran)!
        2. JALUR PIHAK KE-3 / KAPAL: Ada foto pengantaran via kapal/boat. (SAH tanpa wajah penerima).
        3. JALUR TITIP (SAFE PLACE): Jika paket ditaruh di box, meja, rak, pagar, atau lantai tanpa ada foto orang, TETAPI WAJIB ADA lampiran foto screenshot chat yang membuktikan adanya instruksi, persetujuan, atau laporan yang di-iyakan penerima (misal: "taruh aja di box bang", "oke", "siap", "sudah ditaruh ya"), maka itu SAH (Kesepakatan).
 
