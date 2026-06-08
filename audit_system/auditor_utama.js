@@ -68,26 +68,15 @@ async function fetchImageBuffer(url) {
 // ==========================================
 
 async function periksaPelanggaran(resi, fotoFirstProveBuffer, fotoUtamaBuffer, fotoChatBuffer) {
-    const statusType = (resi.DRSHEET_STATUS || '').startsWith('D') ? 'SUKSES' : 'GAGAL';
     const remarks = (resi.DRSHEET_REMARKS || '').trim().toLowerCase();
     const namaPenerima = (resi.CNOTE_RECEIVER_NAME || '').trim().toLowerCase();
 
-    // RULE 1: Cek Anomali Remarks vs Nama Penerima
-    if (remarks === namaPenerima) {
-        if (statusType === 'GAGAL') {
-            return { valid: false, alasan: `Remarks Gagal Tidak Valid! Alasan tertulis nama penerima ("${resi.DRSHEET_REMARKS}"), seharusnya diisi alasan kegagalan.` };
-        }
-    }
-
-    // RULE 2: Tidak ada foto sama sekali
+    // RULE 1: Tidak ada foto sama sekali
     if (!fotoFirstProveBuffer && !fotoUtamaBuffer && !fotoChatBuffer) {
         return { valid: false, alasan: "Kurir sama sekali tidak mengunggah bukti foto / gambar kosong di semua slot (First Prove, Picture, maupun Gallery)." };
     }
 
-    const noHp = (resi.CNOTE_RECEIVER_PHONE || resi.RECEIVER_PHONE || resi.CNOTE_RECEIVER_CONTACT || 'tidak diketahui').trim();
-
-    const prompt = statusType === 'SUKSES' 
-    ? `Tugas: Audit Kepatuhan Kurir (Paket SUKSES).
+    const prompt = `Tugas: Audit Kepatuhan Kurir (Paket SUKSES).
        SYARAT SAH LOLOS AUDIT (Harus penuhi SALAH SATU jalur ini):
        1. JALUR NORMAL: Ada gambar orang menerima barang. Syarat sah: WAJIB nampak bagian tubuh penerima (wajah/kepala/tangan) dan paketnya. (PENTING: SCAN SELURUH SUDUT GAMBAR! Terkadang orang berada di pojok kamera, agak gelap, atau paketnya sangat besar hingga menutupi separuh badan. Jika Anda melihat TANGAN manusia memegang paket, atau potongan wajah/kepala di sudut mana pun, maka itu SAH! Jangan buru-buru menyimpulkan "hanya foto paket" tanpa meneliti sekeliling paket).
        2. JALUR PIHAK KE-3 / KAPAL: Ada foto pengantaran via kapal/boat. (SAH tanpa wajah penerima).
@@ -97,21 +86,7 @@ async function periksaPelanggaran(resi, fotoFirstProveBuffer, fotoUtamaBuffer, f
        - Jika gambar BENAR-BENAR HANYA paket digeletakkan (di lantai, meja, dsb) tanpa ada potongan tubuh/orang sama sekali, DAN TIDAK ADA screenshot chat persetujuan, maka TIDAK SAH!
        - Jika ada screenshot chat tapi tidak nyambung atau tidak ada balasan persetujuan, TIDAK SAH.
        
-       Penting: Balas HANYA format JSON utuh: {"valid": true/false, "alasan": "JIKA valid=true biarkan KOSONG (''). JIKA valid=false tulis pelanggarannya SINGKAT (maks 5-7 kata), misal: 'Hanya paket, tidak ada orang/chat'."}`
-       
-    : `Tugas: Audit Kepatuhan Kurir (Paket GAGAL / Ambil Sendiri).
-       Remarks (Alasan Gagal): "${remarks}".
-       Nomor HP Penerima: "${noHp}".
-       
-       SYARAT SAH LOLOS AUDIT (Harus penuhi SALAH SATU jalur ini):
-       1. JALUR CHAT: Ada foto screenshot bukti chat. Jika remarks adalah "diambil sendiri / ambil di kantor", dan pelanggan merespon "Oke / Siap / Terima Kasih / Ya", maka itu dianggap SAH (Kesepakatan). 
-       2. JALUR TELEPON: Ada foto bukti riwayat panggilan (log) telepon keluar ke nomor penerima. (Jika 4 angka belakang nomor disamarkan, tetap SAH).
-
-       PELANGGARAN: 
-       - Jika hanya foto paket tanpa screenshot chat/telepon -> Alasan: "Tidak ada bukti chat/telepon"
-       - Jika ada chat tapi pelanggan tidak membalas / isinya sama sekali tidak nyambung dengan remarks -> Alasan: "Isi chat tidak membuktikan persetujuan/tidak nyambung"
-       
-       Penting: Balas HANYA format JSON utuh: {"valid": true/false, "alasan": "JIKA valid=true biarkan KOSONG (''). JIKA valid=false tulis SINGKAT sesuai panduan."}`;
+       Penting: Balas HANYA format JSON utuh: {"valid": true/false, "alasan": "JIKA valid=true biarkan KOSONG (''). JIKA valid=false tulis pelanggarannya SINGKAT (maks 5-7 kata), misal: 'Hanya paket, tidak ada orang/chat'."}`;
 
     let retries = 10;
     while (retries > 0) {
@@ -282,7 +257,6 @@ async function jalankanSistemAudit() {
             
             const batchPromises = batch.map(async (resi) => {
                 const awb = resi.DRSHEET_CNOTE_NO;
-                const statusType = (resi.DRSHEET_STATUS || '').startsWith('D') ? 'SUKSES' : 'GAGAL';
 
                 // Tarik SEMUA gambar ke Memori (Buffer) termasuk First Prove (EPOD)
                 const bufferFirstProve = await fetchImageBuffer(resi.EPOD || resi.EPOD_URL);
@@ -300,7 +274,7 @@ async function jalankanSistemAudit() {
                     return {
                         awb: awb,
                         tipe: tipePembayaran,
-                        statusType: statusType,
+                        statusType: 'SUKSES',
                         penerima: resi.CNOTE_RECEIVER_NAME || 'Unknown',
                         remarks: resi.DRSHEET_REMARKS || '-',
                         alasan: hasilCek.alasan,
