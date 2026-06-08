@@ -2,6 +2,16 @@ const { default: makeWASocket, DisconnectReason, useMultiFileAuthState, fetchLat
 const pino = require('pino');
 const qrcode = require('qrcode-terminal');
 const { exec } = require('child_process');
+const rn_bridge = require('rn-bridge');
+
+// Tangkap semua console.log agar tampil di layar HP
+const originalLog = console.log;
+console.log = function(...args) {
+    originalLog(...args);
+    if (rn_bridge && rn_bridge.channel) {
+        rn_bridge.channel.post(JSON.stringify({ type: 'log', data: args.join(' ') }));
+    }
+}
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
@@ -35,6 +45,9 @@ async function connectToWhatsApp() {
         if (qr) {
             console.log('\n[!] SCAN QR CODE DI BAWAH INI MENGGUNAKAN WHATSAPP HP ANDA:\n');
             qrcode.generate(qr, { small: true });
+            if (rn_bridge && rn_bridge.channel) {
+                rn_bridge.channel.post(JSON.stringify({ type: 'qr', data: qr }));
+            }
         }
         
         if (connection === 'close') {
@@ -54,6 +67,9 @@ async function connectToWhatsApp() {
             }
         } else if (connection === 'open') {
             console.log('\n✅ Bot JNE Siap Menerima Perintah!');
+            if (rn_bridge && rn_bridge.channel) {
+                rn_bridge.channel.post(JSON.stringify({ type: 'status', data: 'connected' }));
+            }
         }
     });
 

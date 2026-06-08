@@ -1,17 +1,34 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, Button, ScrollView } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, SafeAreaView, StatusBar } from 'react-native';
 import nodejs from 'nodejs-mobile-react-native';
+import QRCode from 'react-native-qrcode-svg';
 
 export default function App() {
-  const [logs, setLogs] = useState([]);
+  const [logs, setLogs] = useState(['[SYSTEM] Initializing JNE Bot Server...']);
+  const [qrCode, setQrCode] = useState(null);
   const [isRunning, setIsRunning] = useState(false);
+  const scrollViewRef = useRef();
 
   useEffect(() => {
-    // Listen to messages from the Node.js background thread
     nodejs.channel.addListener('message', (msg) => {
-      setLogs(prev => [...prev, msg].slice(-50)); // Keep last 50 logs
-      if (msg.includes('Status: Berjalan')) setIsRunning(true);
-      if (msg.includes('Status: Berhenti')) setIsRunning(false);
+      try {
+        const parsed = JSON.parse(msg);
+        if (parsed.type === 'log') {
+          setLogs(prev => [...prev, parsed.data].slice(-100));
+        } else if (parsed.type === 'qr') {
+          setQrCode(parsed.data);
+          setLogs(prev => [...prev, '[SYSTEM] QR Code received. Please scan to login.']);
+        } else if (parsed.type === 'status') {
+          if (parsed.data === 'connected') {
+            setQrCode(null);
+            setIsRunning(true);
+            setLogs(prev => [...prev, '[SYSTEM] WhatsApp Connected Successfully!']);
+          }
+        }
+      } catch (e) {
+        // If not JSON, just treat as raw log
+        setLogs(prev => [...prev, msg].slice(-100));
+      }
     });
 
     return () => {
@@ -19,52 +36,73 @@ export default function App() {
     };
   }, []);
 
-  const startServer = () => {
-    setLogs(prev => [...prev, 'Starting Node.js engine...']);
-    // Start the Node.js project (which should boot index.js inside nodejs-project)
+  const bootServer = () => {
+    setLogs(prev => [...prev, '[SYSTEM] Booting Node.js Engine...']);
     nodejs.start('index.js');
     setIsRunning(true);
   };
 
-  const stopServer = () => {
-    setLogs(prev => [...prev, 'Stopping Node.js engine...']);
-    // In a real app, send a message to gracefully shutdown
-    nodejs.channel.post('stop');
-    setIsRunning(false);
-  };
-
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>JNE Robot Server</Text>
-        <Text style={styles.subtitle}>Status: {isRunning ? '🟢 ONLINE' : '🔴 OFFLINE'}</Text>
-      </View>
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#000" />
       
-      <View style={styles.buttonContainer}>
-        {!isRunning ? (
-          <Button title="▶ START SERVER 24 JAM" color="#28a745" onPress={startServer} />
-        ) : (
-          <Button title="⏹ STOP SERVER" color="#dc3545" onPress={stopServer} />
-        )}
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>JNE BOT TERMINAL</Text>
+        <View style={styles.statusBadge(isRunning)}>
+          <Text style={styles.statusText}>{isRunning ? 'ONLINE' : 'OFFLINE'}</Text>
+        </View>
       </View>
 
-      <Text style={styles.logTitle}>Terminal Logs:</Text>
-      <ScrollView style={styles.terminal}>
-        {logs.map((log, index) => (
-          <Text key={index} style={styles.logText}>{log}</Text>
-        ))}
-      </ScrollView>
-    </View>
+      {/* QR Code Container */}
+      {qrCode && (
+        <View style={styles.qrContainer}>
+          <View style={styles.qrWrapper}>
+            <QRCode value={qrCode} size={220} backgroundColor="white" />
+          </View>
+          <Text style={styles.qrText}>SCAN QR UNTUK LOGIN WHATSAPP</Text>
+        </View>
+      )}
+
+      {/* Terminal View */}
+      <View style={styles.terminalContainer}>
+        <ScrollView 
+          ref={scrollViewRef}
+          onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: false })}
+          style={styles.terminal}
+        >
+          {logs.map((log, index) => (
+            <Text key={index} style={styles.logText}>
+              <Text style={styles.logPrompt}>root@android:~# </Text>
+              {log}
+            </Text>
+          ))}
+        </ScrollView>
+      </View>
+
+      {/* Boot Button */}
+      {!isRunning && (
+        <TouchableOpacity style={styles.bootButton} onPress={bootServer}>
+          <Text style={styles.bootButtonText}>[ EXECUTE SERVER BOOT ]</Text>
+        </TouchableOpacity>
+      )}
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: '#f4f6f9' },
-  header: { alignItems: 'center', marginTop: 40, marginBottom: 20 },
-  title: { fontSize: 24, fontWeight: 'bold', color: '#0d6efd' },
-  subtitle: { fontSize: 16, marginTop: 5, color: '#495057' },
-  buttonContainer: { marginVertical: 20 },
-  logTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 10 },
-  terminal: { flex: 1, backgroundColor: '#212529', padding: 15, borderRadius: 8 },
-  logText: { color: '#20c997', fontFamily: 'monospace', fontSize: 12, marginBottom: 5 },
+  container: { flex: 1, backgroundColor: '#000000' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 15, borderBottomWidth: 1, borderBottomColor: '#333' },
+  headerTitle: { color: '#00ff00', fontSize: 18, fontWeight: 'bold', fontFamily: 'monospace' },
+  statusBadge: (on) => ({ backgroundColor: on ? '#00ff00' : '#ff0000', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 4 }),
+  statusText: { color: '#000', fontWeight: 'bold', fontSize: 12 },
+  qrContainer: { alignItems: 'center', padding: 20, backgroundColor: '#111', borderBottomWidth: 1, borderBottomColor: '#333' },
+  qrWrapper: { padding: 10, backgroundColor: '#fff', borderRadius: 8 },
+  qrText: { color: '#00ff00', marginTop: 15, fontFamily: 'monospace', fontWeight: 'bold' },
+  terminalContainer: { flex: 1, padding: 10 },
+  terminal: { flex: 1 },
+  logText: { color: '#cccccc', fontFamily: 'monospace', fontSize: 12, marginBottom: 4 },
+  logPrompt: { color: '#00ff00' },
+  bootButton: { backgroundColor: '#00ff00', margin: 20, padding: 15, alignItems: 'center', borderRadius: 4 },
+  bootButtonText: { color: '#000', fontWeight: 'bold', fontFamily: 'monospace', fontSize: 16 }
 });
