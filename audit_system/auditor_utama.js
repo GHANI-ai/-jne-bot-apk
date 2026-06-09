@@ -77,17 +77,20 @@ async function periksaPelanggaran(resi, fotoFirstProveBuffer, fotoUtamaBuffer, f
     }
 
     const prompt = `Tugas: Audit Kepatuhan Kurir (Paket SUKSES).
-       SYARAT SAH LOLOS AUDIT (Harus penuhi SALAH SATU jalur ini):
-       1. JALUR NORMAL: Ada gambar orang bersama barangnya. Syarat mutlak: WAJIB nampak KEPALA manusia penerima di dalam frame (TIDAK WAJIB nampak wajah depan; boleh terlihat dari belakang, samping, atau pakai helm). Paket harus terlihat berada bersama orang tersebut.
-       [ATURAN EMAS]: Jika kepala nampak tapi badannya tidak nampak, itu MASIH SAH. TETAPI, jika KEPALA TIDAK NAMPAK (misal: hanya foto tangan yang menerima paket, atau badan terpotong tanpa kepala), maka itu MUTLAK TIDAK SAH (Pelanggaran)!
-       2. JALUR PIHAK KE-3 / KAPAL: Ada foto pengantaran via kapal/boat. (SAH tanpa wajah penerima).
-       3. JALUR TITIP (SAFE PLACE): Jika paket ditaruh di box, meja, rak, pagar, atau lantai tanpa ada foto orang, TETAPI WAJIB ADA lampiran foto screenshot chat yang membuktikan adanya instruksi, persetujuan, atau laporan yang di-iyakan penerima (misal: "taruh aja di box bang", "oke", "siap", "sudah ditaruh ya"), maka itu SAH (Kesepakatan).
-
-       PELANGGARAN: 
-       - Jika gambar BENAR-BENAR HANYA paket digeletakkan (di lantai, meja, dsb) tanpa ada potongan tubuh/orang sama sekali, DAN TIDAK ADA screenshot chat persetujuan, maka TIDAK SAH!
-       - Jika ada screenshot chat tapi tidak nyambung atau tidak ada balasan persetujuan, TIDAK SAH.
+       PENTING: Kamu akan menerima 1-3 gambar. Gambar pertama biasanya HANYA Tanda Tangan (Abaikan tanda tangan, jangan jadikan ini sebagai satu-satunya dasar). FOKUS cari wajah manusia dan paket pada gambar kedua atau ketiga!
        
-       Penting: Balas HANYA format JSON utuh: {"valid": true/false, "alasan": "JIKA valid=true biarkan KOSONG (''). JIKA valid=false tulis pelanggarannya SINGKAT (maks 5-7 kata), misal: 'Hanya paket, tidak ada orang/chat'."}`;
+       SYARAT SAH LOLOS AUDIT (Harus penuhi SALAH SATU jalur ini):
+       1. JALUR NORMAL: Ada gambar orang bersama barangnya. Syarat mutlak: WAJIB nampak anggota tubuh penerima (kepala, punggung, badan, atau minimal tangan yang sedang memegang paket). Paket harus terlihat di dalam foto (meskipun bentuknya kecil atau tertutup plastik, asalkan ada bentuk barang paket, maka SAH).
+       2. JALUR PIHAK KE-3 / KAPAL: Ada foto pengantaran via kapal/boat atau dititipkan ke sekuriti berseragam. (SAH).
+       3. JALUR TITIP (SAFE PLACE): Jika paket ditaruh di box, meja, rak, pagar, atau lantai tanpa ada foto orang, TETAPI ADA foto screenshot chat persetujuan penerima (misal: "taruh aja di box bang", "oke", "siap", "sudah ditaruh ya"), maka itu SAH.
+
+       PELANGGARAN (TIDAK SAH): 
+       - Jika gambar BENAR-BENAR HANYA paket digeletakkan di lantai/meja tanpa ada orang sama sekali, DAN TIDAK ADA screenshot chat persetujuan.
+       - Jika DARI SEMUA GAMBAR hanya berisi foto tanda tangan putih polos tanpa ada foto orang/paket sama sekali.
+       
+       ATURAN BAHASA: DILARANG KERAS menggunakan istilah terjemahan mesin yang aneh seperti "mangsa tak terlihat". Gunakan bahasa Indonesia yang profesional (contoh: "Penerima tidak terlihat di foto", "Hanya paket di lantai tanpa chat").
+       
+       Balas HANYA format JSON utuh: {"valid": true/false, "alasan": "JIKA valid=true biarkan KOSONG (''). JIKA valid=false tulis pelanggarannya SINGKAT (maks 6-8 kata)."}`;
 
     let retries = 10;
     while (retries > 0) {
