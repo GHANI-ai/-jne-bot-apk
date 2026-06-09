@@ -72,12 +72,12 @@ async function periksaPelanggaran(resi, fotoFirstProveBuffer, fotoUtamaBuffer, f
     const namaPenerima = (resi.CNOTE_RECEIVER_NAME || '').trim().toLowerCase();
 
     // RULE 1: Tidak ada foto sama sekali
-    if (!fotoFirstProveBuffer && !fotoUtamaBuffer && !fotoChatBuffer) {
-        return { valid: false, alasan: "Kurir sama sekali tidak mengunggah bukti foto / gambar kosong di semua slot (First Prove, Picture, maupun Gallery)." };
+    if (!fotoUtamaBuffer && !fotoChatBuffer) {
+        return { valid: false, alasan: "Kurir tidak mengunggah bukti foto orang (Picture) maupun foto chat (Gallery)." };
     }
 
     const prompt = `Tugas: Audit Kepatuhan Kurir (Paket SUKSES).
-       PENTING: Kamu akan menerima 1-3 gambar. Gambar pertama biasanya HANYA Tanda Tangan (Abaikan tanda tangan, jangan jadikan ini sebagai satu-satunya dasar). FOKUS cari wajah manusia dan paket pada gambar kedua atau ketiga!
+       PENTING: Kamu akan menerima 1-2 gambar. Fokus cari wajah/tubuh manusia dan paket. (Gambar tanda tangan sudah kami blokir, jadi semua gambar yang kamu terima adalah foto orang atau screenshot chat).
        
        SYARAT SAH LOLOS AUDIT (Harus penuhi SALAH SATU jalur ini):
        1. JALUR NORMAL: Ada gambar orang bersama barangnya. Syarat mutlak: WAJIB nampak anggota tubuh penerima (kepala, punggung, badan, atau minimal tangan yang sedang memegang paket). Paket harus terlihat di dalam foto (meskipun bentuknya kecil atau tertutup plastik, asalkan ada bentuk barang paket, maka SAH).
@@ -86,7 +86,6 @@ async function periksaPelanggaran(resi, fotoFirstProveBuffer, fotoUtamaBuffer, f
 
        PELANGGARAN (TIDAK SAH): 
        - Jika gambar BENAR-BENAR HANYA paket digeletakkan di lantai/meja tanpa ada orang sama sekali, DAN TIDAK ADA screenshot chat persetujuan.
-       - Jika DARI SEMUA GAMBAR hanya berisi foto tanda tangan putih polos tanpa ada foto orang/paket sama sekali.
        
        ATURAN BAHASA: DILARANG KERAS menggunakan istilah terjemahan mesin yang aneh seperti "mangsa tak terlihat". Gunakan bahasa Indonesia yang profesional (contoh: "Penerima tidak terlihat di foto", "Hanya paket di lantai tanpa chat").
        
@@ -99,7 +98,8 @@ async function periksaPelanggaran(resi, fotoFirstProveBuffer, fotoUtamaBuffer, f
             if (!orKey) return { valid: false, alasan: "[ERROR] OPENROUTER_API_KEYS kosong di .env" };
 
             const contentArray = [{ type: "text", text: prompt }];
-            if (fotoFirstProveBuffer) contentArray.push({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${fotoFirstProveBuffer.toString("base64")}` } });
+            
+            // TANDA TANGAN (fotoFirstProveBuffer) SENGAJA TIDAK DIKIRIM KE AI!
             if (fotoUtamaBuffer) contentArray.push({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${fotoUtamaBuffer.toString("base64")}` } });
             if (fotoChatBuffer) contentArray.push({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${fotoChatBuffer.toString("base64")}` } });
 
