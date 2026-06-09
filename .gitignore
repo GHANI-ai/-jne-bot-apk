@@ -1,0 +1,5 @@
+node_modules/
+bot_session/
+audit_system/Laporan/
+audit_system/.jne_token.json
+.DS_Store
