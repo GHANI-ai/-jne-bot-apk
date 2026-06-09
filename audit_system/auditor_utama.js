@@ -104,7 +104,7 @@ async function periksaPelanggaran(resi, fotoFirstProveBuffer, fotoUtamaBuffer, f
             if (fotoChatBuffer) contentArray.push({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${fotoChatBuffer.toString("base64")}` } });
 
             const response = await axios.post("https://openrouter.ai/api/v1/chat/completions", {
-                model: "anthropic/claude-3.5-sonnet", // <-- MATA ELANG KELAS ATAS
+                model: "google/gemini-flash-1.5", // <-- MATA ELANG VERSI EKONOMIS (SANGAT MURAH)
                 messages: [{ role: "user", content: contentArray }],
                 response_format: { type: "json_object" }
             }, {
