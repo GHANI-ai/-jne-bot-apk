@@ -333,8 +333,18 @@ async function connectToWhatsApp() {
             }
             
         } catch (error) {
-            console.error(error);
-            await sock.sendMessage(chatId, { text: "❌ Terjadi kesalahan saat memproses permintaan." });
+            console.error("ERROR TERDETEKSI:", error?.message || error);
+            try {
+                // Jangan paksa kirim pesan jika error karena koneksi terputus (428 Precondition Required)
+                const isConnectionError = error?.message?.includes('Connection Closed') || error?.output?.statusCode === 428;
+                if (!isConnectionError) {
+                    await sock.sendMessage(chatId, { text: "❌ Terjadi kesalahan saat memproses permintaan." });
+                } else {
+                    console.log("Mengabaikan pengiriman pesan error karena koneksi WhatsApp sedang terputus/reconnecting.");
+                }
+            } catch (fallbackError) {
+                console.error("Gagal mengirim pesan peringatan (Socket mati):", fallbackError?.message);
+            }
         }
     });
 }
