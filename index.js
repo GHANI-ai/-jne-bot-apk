@@ -227,15 +227,25 @@ async function connectToWhatsApp() {
                 const cleanText = text.replace(/@\d+/g, '').trim();
                 if (!cleanText) return;
 
-                // Menggunakan model gemini-3.0-flash sesuai permintaan
+                // 1. Kirim pesan penanda proses
+                let processMsg = await sock.sendMessage(chatId, { text: "⏳ *[Mabes AI]* Sedang memikirkan jawaban..." }, { quoted: msg });
+
+                // 2. Eksekusi perintah (menggunakan npx jika gemini-cli diinstal secara lokal, atau langsung command-nya)
                 const command = `gemini --model gemini-3.0-flash "Kamu adalah Asisten AI JNE & Mabes. Jawab ini secara ringkas: ${cleanText}"`;
+                
                 exec(command, async (error, stdout, stderr) => {
                     if (error) {
-                        console.error("Gemini CLI Error:", stderr);
+                        // 3. Jika error (misal command gemini tidak ditemukan), laporkan ke WhatsApp
+                        console.error("Gemini CLI Error:", stderr || error.message);
+                        await sock.sendMessage(chatId, { 
+                            text: `❌ *Gagal Memproses AI!*\n\n*Error System:*\n\`\`\`${stderr || error.message}\`\`\``, 
+                            edit: processMsg.key 
+                        });
                         return;
                     }
                     if (stdout) {
-                        await sock.sendMessage(chatId, { text: "🤖 " + stdout.trim() }, { quoted: msg });
+                        // 4. Jika sukses, edit pesan proses menjadi jawaban asli
+                        await sock.sendMessage(chatId, { text: "🤖 " + stdout.trim(), edit: processMsg.key });
                     }
                 });
             }
