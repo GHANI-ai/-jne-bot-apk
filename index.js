@@ -230,15 +230,18 @@ async function connectToWhatsApp() {
                 // 1. Kirim pesan penanda proses
                 let processMsg = await sock.sendMessage(chatId, { text: "⏳ *[Mabes AI]* Sedang memikirkan jawaban..." }, { quoted: msg });
 
-                // 2. Eksekusi perintah (tambahkan --prompt agar jalan di background/headless mode)
-                const command = `gemini --model gemini-3.0-flash --prompt "Kamu adalah Asisten AI JNE & Mabes. Jawab ini secara ringkas: ${cleanText}"`;
+                // 2. Eksekusi perintah (tanpa flag --model agar menggunakan default dari sistem dan terhindar dari Error 400/404)
+                const command = `gemini --prompt "Kamu adalah Asisten AI JNE & Mabes. Jawab ini secara ringkas: ${cleanText}"`;
                 
                 exec(command, async (error, stdout, stderr) => {
                     if (error) {
-                        // 3. Jika error (misal command gemini tidak ditemukan), laporkan ke WhatsApp
-                        console.error("Gemini CLI Error:", stderr || error.message);
+                        // Batasi teks error agar tidak membuat layar HP nyangkut (maksimal 300 karakter)
+                        const rawError = stderr || error.message || "Unknown error";
+                        const shortError = rawError.length > 300 ? rawError.substring(0, 300) + "\n...[Error terpotong]" : rawError;
+                        
+                        console.error("Gemini CLI Error:", shortError);
                         await sock.sendMessage(chatId, { 
-                            text: `❌ *Gagal Memproses AI!*\n\n*Error System:*\n\`\`\`${stderr || error.message}\`\`\``, 
+                            text: `❌ *Gagal Memproses AI!*\n\n*Penyebab:*\n\`\`\`${shortError}\`\`\``, 
                             edit: processMsg.key 
                         });
                         return;
