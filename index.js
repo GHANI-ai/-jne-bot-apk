@@ -8,6 +8,102 @@ const path = require('path');
 const readline = require('readline');
 const { getValidToken } = require('./audit_system/jne_auth');
 
+const express = require('express');
+const cors = require('cors');
+const bodyParser = require('body-parser');
+
+const app = express();
+app.use(cors());
+app.use(bodyParser.json());
+
+const DB_FILE = 'database.json';
+if (!fs.existsSync(DB_FILE)) {
+    fs.writeFileSync(DB_FILE, JSON.stringify({ users: [], locations: {} }, null, 2));
+}
+
+function loadDB() {
+    try { return JSON.parse(fs.readFileSync(DB_FILE, 'utf-8')); } catch(e) { return { users: [], locations: {} }; }
+}
+function saveDB(data) {
+    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+}
+
+// =====================================
+// SERVER MABES API ENDPOINTS
+// =====================================
+app.post('/api/login', (req, res) => {
+    const { name, age, dob, whatsapp, password, lat, lng } = req.body;
+    let db = loadDB();
+    let user = db.users.find(u => u.whatsapp === whatsapp);
+    if (!user) {
+        user = { name, age, dob, whatsapp, password, isBanned: false };
+        db.users.push(user);
+    } else {
+        if (user.password !== password) return res.status(401).json({ error: 'Password salah' });
+        if (user.isBanned) return res.status(403).json({ error: 'Akun Anda telah di-banned.' });
+    }
+    if (lat && lng) db.locations[whatsapp] = { name: user.name, lat, lng, timestamp: new Date().toISOString() };
+    saveDB(db);
+    res.json({ success: true, message: 'Login berhasil', user });
+});
+
+app.post('/api/location', (req, res) => {
+    const { whatsapp, lat, lng } = req.body;
+    let db = loadDB();
+    let user = db.users.find(u => u.whatsapp === whatsapp);
+    if (user && !user.isBanned) {
+        db.locations[whatsapp] = { name: user.name, lat, lng, timestamp: new Date().toISOString() };
+        saveDB(db);
+        return res.json({ success: true });
+    }
+    res.status(403).json({ error: 'Unauthorized or banned' });
+});
+
+app.get('/api/users', (req, res) => {
+    let db = loadDB();
+    res.json({ success: true, users: db.users.map(u => ({ name: u.name, whatsapp: u.whatsapp, age: u.age, isBanned: u.isBanned })) });
+});
+
+app.get('/api/notes', (req, res) => {
+    let db = loadDB();
+    if (!db.notes) { db.notes = []; saveDB(db); }
+    res.json({ success: true, notes: db.notes });
+});
+
+app.post('/api/notes', (req, res) => {
+    const { id, text, color, offsetX, offsetY } = req.body;
+    let db = loadDB();
+    if (!db.notes) db.notes = [];
+    const idx = db.notes.findIndex(n => n.id === id);
+    if (idx >= 0) { db.notes[idx].offsetX = offsetX; db.notes[idx].offsetY = offsetY; }
+    else { db.notes.push({ id, text, color, offsetX, offsetY }); }
+    saveDB(db);
+    res.json({ success: true });
+});
+
+app.delete('/api/notes/:id', (req, res) => {
+    let db = loadDB();
+    if (db.notes) { db.notes = db.notes.filter(n => n.id !== parseInt(req.params.id)); saveDB(db); }
+    res.json({ success: true });
+});
+
+app.post('/api/gps-status', (req, res) => {
+    const { whatsapp, status } = req.body;
+    if (status === false) {
+        let db = loadDB();
+        const user = db.users.find(u => u.whatsapp === whatsapp);
+        const name = user ? user.name : "Karyawan Tak Dikenal";
+        console.log(`\n🚨 ALARM PELANGGARAN! 🚨`);
+        console.log(`⚠️ Pekerja: ${name} (WA: ${whatsapp})`);
+        console.log(`⚠️ Status: MEMATIKAN GPS SECARA SENGAJA!`);
+        console.log(`🚨 ALARM PELANGGARAN! 🚨\n`);
+    }
+    res.json({ success: true });
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, '0.0.0.0', () => console.log(`🚀 MABES SERVER (API) MENYALA DI PORT ${PORT}`));
+
 // =====================================
 // FUNGSI HISTORY AUDIT (Cegah Double)
 // =====================================
@@ -113,6 +209,37 @@ async function connectToWhatsApp() {
         const messageType = Object.keys(msg.message)[0];
         const text = msg.message.conversation || msg.message[messageType]?.text || "";
         
+        // =====================================
+        // AI ENGINE (Teks biasa tanpa awalan /)
+        // =====================================
+        if (!text.startsWith('/')) {
+            const chatId = msg.key.remoteJid;
+            const isGroup = chatId.endsWith('@g.us');
+            const botNumber = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+            
+            // Cek apakah disebut (mentioned) atau di-reply
+            const contextInfo = msg.message[messageType]?.contextInfo;
+            const isMentioned = contextInfo?.mentionedJid?.includes(botNumber);
+            const isReplyToBot = contextInfo?.participant === botNumber;
+
+            // Logika AI: Balas jika Private Chat ATAU (Di grup HANYA jika disebut/di-reply)
+            if (!isGroup || isMentioned || isReplyToBot) {
+                const cleanText = text.replace(/@\d+/g, '').trim();
+                if (!cleanText) return;
+
+                const command = `antigravity-cli --prompt "Kamu adalah Asisten AI JNE & Mabes. Jawab ini secara ringkas: ${cleanText}"`;
+                exec(command, async (error, stdout, stderr) => {
+                    if (!error) {
+                        await sock.sendMessage(chatId, { text: "🤖 " + stdout.trim() }, { quoted: msg });
+                    }
+                });
+            }
+            return; // Hentikan eksekusi, karena pesan ini BUKAN perintah /
+        }
+        
+        // =====================================
+        // NATIVE COMMAND LOGIC (Misal: /cek)
+        // =====================================
         if (!text.startsWith('/cek')) return;
         
         const args = text.trim().split(/\s+/).slice(1);
