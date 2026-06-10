@@ -227,9 +227,14 @@ async function connectToWhatsApp() {
                 const cleanText = text.replace(/@\d+/g, '').trim();
                 if (!cleanText) return;
 
-                const command = `antigravity-cli --prompt "Kamu adalah Asisten AI JNE & Mabes. Jawab ini secara ringkas: ${cleanText}"`;
+                // Menggunakan model gemini-3.0-pro sesuai permintaan
+                const command = `gemini --model gemini-3.0-pro "Kamu adalah Asisten AI JNE & Mabes. Jawab ini secara ringkas: ${cleanText}"`;
                 exec(command, async (error, stdout, stderr) => {
-                    if (!error) {
+                    if (error) {
+                        console.error("Gemini CLI Error:", stderr);
+                        return;
+                    }
+                    if (stdout) {
                         await sock.sendMessage(chatId, { text: "🤖 " + stdout.trim() }, { quoted: msg });
                     }
                 });
