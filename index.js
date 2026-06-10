@@ -230,8 +230,8 @@ async function connectToWhatsApp() {
                 // 1. Kirim pesan penanda proses
                 let processMsg = await sock.sendMessage(chatId, { text: "⏳ *[Mabes AI]* Sedang memikirkan jawaban..." }, { quoted: msg });
 
-                // 2. Eksekusi perintah (menggunakan npx jika gemini-cli diinstal secara lokal, atau langsung command-nya)
-                const command = `gemini --model gemini-3.0-flash "Kamu adalah Asisten AI JNE & Mabes. Jawab ini secara ringkas: ${cleanText}"`;
+                // 2. Eksekusi perintah (tambahkan --prompt agar jalan di background/headless mode)
+                const command = `gemini --model gemini-3.0-flash --prompt "Kamu adalah Asisten AI JNE & Mabes. Jawab ini secara ringkas: ${cleanText}"`;
                 
                 exec(command, async (error, stdout, stderr) => {
                     if (error) {
