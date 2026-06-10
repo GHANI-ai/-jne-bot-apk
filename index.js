@@ -56,12 +56,20 @@ async function connectToWhatsApp() {
 
     sock.ev.on('creds.update', saveCreds);
 
+    sock.ev.on('creds.update', saveCreds);
+
+    let cleanNumber = "";
     if (!sock.authState.creds.registered) {
         console.log('\n[INFO] Sesi login belum ditemukan.');
         const phoneNumber = await question('Masukkan Nomor WhatsApp Bot (awali dengan 62, contoh: 62812345...): ');
-        const cleanNumber = phoneNumber.replace(/[^0-9]/g, '');
+        cleanNumber = phoneNumber.replace(/[^0-9]/g, '');
+    }
+
+    sock.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect, qr } = update;
         
-        setTimeout(async () => {
+        // Minta Pairing Code HANYA ketika socket sudah siap (ditandai dengan munculnya event QR)
+        if (qr && !sock.authState.creds.registered && cleanNumber) {
             try {
                 const code = await sock.requestPairingCode(cleanNumber);
                 console.log(`\n=========================================`);
@@ -74,13 +82,9 @@ async function connectToWhatsApp() {
                 console.log(`4. Masukkan kode di atas`);
                 console.log(`=========================================\n`);
             } catch (err) {
-                console.log('Gagal meminta Pairing Code:', err);
+                console.log('\n❌ Gagal meminta Pairing Code. Silakan restart program.', err.message);
             }
-        }, 3000);
-    }
-
-    sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect, qr } = update;
+        }
         
         // Kita abaikan QR code karena sekarang menggunakan Pairing Code
         
