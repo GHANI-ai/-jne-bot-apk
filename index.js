@@ -44,6 +44,14 @@ async function connectToWhatsApp() {
     // Simpan sesi di folder terpisah
     const { state, saveCreds } = await useMultiFileAuthState('bot_session');
 
+    // Minta nomor telepon SEBELUM membuka koneksi WebSocket agar event QR tidak terlewat
+    let cleanNumber = "";
+    if (!state.creds.registered) {
+        console.log('\n[INFO] Sesi login belum ditemukan.');
+        const phoneNumber = await question('Masukkan Nomor WhatsApp Bot (awali dengan 62, contoh: 62812345...): ');
+        cleanNumber = phoneNumber.replace(/[^0-9]/g, '');
+    }
+
     const sock = makeWASocket({
         version,
         auth: {
@@ -55,15 +63,6 @@ async function connectToWhatsApp() {
     });
 
     sock.ev.on('creds.update', saveCreds);
-
-    sock.ev.on('creds.update', saveCreds);
-
-    let cleanNumber = "";
-    if (!sock.authState.creds.registered) {
-        console.log('\n[INFO] Sesi login belum ditemukan.');
-        const phoneNumber = await question('Masukkan Nomor WhatsApp Bot (awali dengan 62, contoh: 62812345...): ');
-        cleanNumber = phoneNumber.replace(/[^0-9]/g, '');
-    }
 
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
@@ -89,12 +88,10 @@ async function connectToWhatsApp() {
         // Kita abaikan QR code karena sekarang menggunakan Pairing Code
         
         if (connection === 'close') {
-            const statusCode = lastDisconnect.error?.output?.statusCode;
-            const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+            const shouldReconnect = (lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut;
+            console.log('Koneksi terputus. Menghubungkan ulang...', shouldReconnect);
             
-            console.log('Koneksi terputus. Menyambung ulang:', shouldReconnect);
-            
-            if (statusCode === DisconnectReason.loggedOut) {
+            if (lastDisconnect?.error?.output?.statusCode === DisconnectReason.loggedOut) {
                 console.log('🚪 Anda telah Log Out. Menghapus sesi lama...');
                 fs.rmSync('bot_session', { recursive: true, force: true });
                 console.log('♻️ Memulai ulang bot untuk membuat QR Code baru...');
