@@ -258,7 +258,9 @@ async function connectToWhatsApp() {
         // =====================================
         // NATIVE COMMAND LOGIC (Misal: /cek)
         // =====================================
-        if (!text.startsWith('/cek')) return;
+        if (!text.startsWith('/cek') && !text.startsWith('/peforma')) return;
+        
+        const isPeforma = text.startsWith('/peforma');
         
         const args = text.trim().split(/\s+/).slice(1);
         
@@ -323,6 +325,31 @@ async function connectToWhatsApp() {
 
             // Cari ID Kurir yang sebenarnya
             let actualCourierId = param ? (nameToIdMap[param] || param) : null;
+            
+            if (isPeforma) {
+                if (!actualCourierId || actualCourierId === "SEMUA") {
+                    await sock.sendMessage(chatId, { text: "⚠️ Masukkan ID kurir spesifik untuk melihat peforma (misal: `/peforma PKU1151`)." });
+                    return;
+                }
+                
+                await sock.sendMessage(chatId, { text: `⏳ *Memproses Laporan Peforma H+* untuk kurir *${actualCourierId}*...\nBot sedang mengambil data 10 hari terakhir, mohon tunggu.` }, { quoted: msg });
+                
+                await new Promise(res => exec(`node peforma.js ${actualCourierId}`, {cwd: path.join(__dirname)}, (err) => res()));
+                
+                const excelFile = path.join(__dirname, `peforma_${actualCourierId}.xlsx`);
+                const pngFile = path.join(__dirname, `peforma_${actualCourierId}.png`);
+                
+                if (!fs.existsSync(excelFile)) {
+                     await sock.sendMessage(chatId, { text: `❌ Data tidak ditemukan atau tidak ada aktivitas untuk kurir *${actualCourierId}*.` });
+                     return;
+                }
+                
+                if (fs.existsSync(pngFile)) {
+                    await sock.sendMessage(chatId, { image: fs.readFileSync(pngFile), caption: `📊 *Grafik Peforma Kurir ${actualCourierId}*` });
+                }
+                await sock.sendMessage(chatId, { document: fs.readFileSync(excelFile), mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', fileName: `Peforma_HPlus_${actualCourierId}.xlsx` });
+                return;
+            }
             
             // Parsing untuk pengecualian "/cek semua not A,B"
             let actualExcludedIds = [];
