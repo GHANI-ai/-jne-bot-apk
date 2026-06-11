@@ -261,7 +261,35 @@ async function connectToWhatsApp() {
         if (!text.startsWith('/cek')) return;
         
         const args = text.trim().split(/\s+/).slice(1);
-        const param = args[0] ? args[0].toUpperCase() : null;
+        
+        // Fungsi untuk menghitung tanggal mundur otomatis
+        const getPastDate = (days) => {
+            const d = new Date();
+            d.setDate(d.getDate() - days);
+            const pad = n => n < 10 ? '0' + n : n;
+            return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+        };
+
+        let dateOnly = null;
+        let filteredArgs = [];
+        
+        // Cek argumen apakah ada format tanggal atau pintasan "kemarin" / "h-X"
+        for (let a of args) {
+            let lower = a.toLowerCase();
+            if (/^\d{4}-\d{2}-\d{2}$/.test(a)) {
+                dateOnly = a; // Format utuh: 2026-06-05
+            } else if (lower === 'kemarin' || lower === 'h-1') {
+                dateOnly = getPastDate(1); // Kemarin
+            } else if (lower.startsWith('h-')) {
+                let days = parseInt(lower.replace('h-', ''));
+                if (!isNaN(days)) dateOnly = getPastDate(days); // Mundur X hari
+            } else {
+                filteredArgs.push(a); // Argumen bukan tanggal berarti ID Kurir
+            }
+        }
+        
+        const param = filteredArgs[0] ? filteredArgs[0].toUpperCase() : null;
+        
         const chatId = msg.key.remoteJid;
 
         try {
@@ -270,8 +298,10 @@ async function connectToWhatsApp() {
             
             const now = new Date();
             const pad = n => n < 10 ? '0' + n : n;
-            const dateOnly = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
-            const fullDateTime = `${dateOnly} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+            if (!dateOnly) {
+                dateOnly = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+            }
+            const fullDateTime = `${dateOnly} 23:59:59`; // gunakan akhir hari untuk sync agar narik semua data hari itu
             
             const url = `https://sca.jne.id/lm-api/dashboard/report?from=${dateOnly}&to=${dateOnly}&result_type=list`;
             
