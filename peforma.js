@@ -9,6 +9,19 @@ if (!courierId) {
     process.exit(1);
 }
 
+const isSemua = courierId.toUpperCase() === 'SEMUA';
+
+// Fungsi untuk membuat warna acak di grafik
+function getRandomColor(index) {
+    const colors = [
+        'rgb(255, 99, 132)', 'rgb(54, 162, 235)', 'rgb(255, 206, 86)',
+        'rgb(75, 192, 192)', 'rgb(153, 102, 255)', 'rgb(255, 159, 64)',
+        'rgb(199, 199, 199)', 'rgb(83, 102, 255)', 'rgb(255, 102, 255)',
+        'rgb(102, 255, 102)', 'rgb(255, 102, 102)', 'rgb(102, 102, 255)'
+    ];
+    return colors[index % colors.length];
+}
+
 async function run() {
     const token = await getValidToken();
     let awbHistory = {}; 
@@ -22,13 +35,20 @@ async function run() {
         const dateStr = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
         
         try {
-            const url = `https://sca.jne.id/lm-api/dashboard/report?from=${dateStr}&to=${dateStr}&courier_id=${courierId}&result_type=list`;
+            const url = isSemua 
+                ? `https://sca.jne.id/lm-api/dashboard/report?from=${dateStr}&to=${dateStr}&result_type=list`
+                : `https://sca.jne.id/lm-api/dashboard/report?from=${dateStr}&to=${dateStr}&courier_id=${courierId}&result_type=list`;
+                
             const res = await axios.get(url, { headers: { Authorization: token } });
             const list = res.data.data || [];
             
             for (let item of list) {
                 const awb = item.DRSHEET_CNOTE_NO;
                 if (!awb) continue;
+                
+                const currentCid = item.MRSHEET_COURIER_ID ? item.MRSHEET_COURIER_ID.toUpperCase() : 'UNKNOWN';
+                const cName = item.COURIER_NAME || item.MRSHEET_COURIER_NAME || item.DRSHEET_COURIER_NAME || currentCid;
+                
                 if (!awbHistory[awb]) {
                     awbHistory[awb] = { 
                         dates: new Set(), 
@@ -36,7 +56,8 @@ async function run() {
                         isSuccess: false,
                         receiver: item.CNOTE_RECEIVER_NAME || '',
                         address: item.CNOTE_RECEIVER_ADDR1 || '',
-                        courierName: item.COURIER_NAME || item.MRSHEET_COURIER_NAME || item.DRSHEET_COURIER_NAME || courierId
+                        courierId: currentCid,
+                        courierName: cName
                     };
                 }
                 awbHistory[awb].dates.add(dateStr);
@@ -45,39 +66,47 @@ async function run() {
                 if (i === 0 || !awbHistory[awb].finalStatus || !awbHistory[awb].isSuccess) {
                     awbHistory[awb].finalStatus = item.POD_STATUS || item.DRSHEET_STATUS || 'On Process';
                     awbHistory[awb].isSuccess = item.DRSHEET_STATUS && item.DRSHEET_STATUS.startsWith('D');
+                    // Update the courier info to the latest person carrying it
+                    awbHistory[awb].courierId = currentCid;
+                    awbHistory[awb].courierName = cName;
                 }
             }
         } catch(e) {}
     }
     
-    // Olah data Excel
+    // Olah data Excel dan Hitungan Chart
     let excelData = [];
-    let hCounts = {
-        'H+0': { success: 0, fail: 0 },
-        'H+1': { success: 0, fail: 0 },
-        'H+2': { success: 0, fail: 0 },
-        'H+3': { success: 0, fail: 0 },
-        'H+4': { success: 0, fail: 0 },
-        'H+5': { success: 0, fail: 0 },
-        'H+6': { success: 0, fail: 0 },
-        'H+7': { success: 0, fail: 0 },
-        '>H+7': { success: 0, fail: 0 }
-    };
+    let courierPerformance = {}; // { 'PKU1151': { name: '..', H+0: 0, H+1: 0 } }
     
-    let cName = courierId;
+    // Inisialisasi struktur
+    const hKeys = ['H+0', 'H+1', 'H+2', 'H+3', 'H+4', 'H+5', 'H+6', 'H+7', '>H+7'];
+    
+    // Global stats for single courier chart (Sukses vs Gagal)
+    let globalStats = {};
+    hKeys.forEach(k => globalStats[k] = { success: 0, fail: 0 });
+
     for (let awb in awbHistory) {
         let hist = awbHistory[awb];
-        cName = hist.courierName; // Ambil nama asli jika ada
         const h = hist.dates.size - 1;
         let key = h > 7 ? '>H+7' : `H+${h}`;
         
+        let cid = hist.courierId;
+        if (!courierPerformance[cid]) {
+            courierPerformance[cid] = { name: hist.courierName };
+            hKeys.forEach(k => courierPerformance[cid][k] = 0);
+        }
+        
+        // Update Chart Stats
         if (hist.isSuccess) {
-            hCounts[key].success++;
+            courierPerformance[cid][key]++;
+            globalStats[key].success++;
         } else {
-            hCounts[key].fail++;
+            globalStats[key].fail++;
         }
         
         excelData.push({
+            'Kurir ID': cid,
+            'Nama Kurir': hist.courierName,
             'Resi': awb,
             'Penerima': hist.receiver,
             'Alamat': hist.address,
@@ -104,25 +133,47 @@ async function run() {
     xlsx.writeFile(wb, excelFile);
     
     // Generate Chart
-    const labels = Object.keys(hCounts);
-    const dataSuccess = labels.map(k => hCounts[k].success);
-    const dataFail = labels.map(k => hCounts[k].fail);
+    let datasets = [];
+    
+    if (isSemua) {
+        // Mode SEMUA: Bandingkan Jumlah Sukses antar semua kurir
+        let colorIdx = 0;
+        for (let cid in courierPerformance) {
+            let dataArr = hKeys.map(k => courierPerformance[cid][k]);
+            
+            // Skip kurir yang datanya kosong melompong (tidak ada paket sukses)
+            if (dataArr.every(val => val === 0)) continue;
+            
+            datasets.push({
+                label: `${cid} (${courierPerformance[cid].name})`,
+                borderColor: getRandomColor(colorIdx),
+                backgroundColor: 'transparent',
+                data: dataArr,
+                fill: false,
+                tension: 0.4
+            });
+            colorIdx++;
+        }
+    } else {
+        // Mode 1 Kurir: Bandingkan Sukses vs Gagal
+        const dataSuccess = hKeys.map(k => globalStats[k].success);
+        const dataFail = hKeys.map(k => globalStats[k].fail);
+        datasets.push({ label: 'Sukses (Delivered)', borderColor: 'rgb(75, 192, 192)', backgroundColor: 'rgba(75, 192, 192, 0.2)', data: dataSuccess, fill: true, tension: 0.4 });
+        datasets.push({ label: 'Gagal / Pending', borderColor: 'rgb(255, 99, 132)', backgroundColor: 'rgba(255, 99, 132, 0.2)', data: dataFail, fill: true, tension: 0.4 });
+    }
     
     const chartConfig = {
         type: 'line',
         data: {
-            labels: labels,
-            datasets: [
-                { label: 'Sukses (Delivered)', borderColor: 'rgb(75, 192, 192)', backgroundColor: 'rgba(75, 192, 192, 0.2)', data: dataSuccess, fill: true, tension: 0.4 },
-                { label: 'Gagal / Pending', borderColor: 'rgb(255, 99, 132)', backgroundColor: 'rgba(255, 99, 132, 0.2)', data: dataFail, fill: true, tension: 0.4 }
-            ]
+            labels: hKeys,
+            datasets: datasets
         },
         options: {
-            title: { display: true, text: `Grafik Garis Peforma Kurir ${cName} (${courierId})` },
+            title: { display: true, text: isSemua ? `Adu Mekanik Peforma Sukses Semua Kurir` : `Peforma Sukses vs Gagal Kurir ${courierId}` },
         }
     };
     
-    const chartUrl = `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(chartConfig))}&w=800&h=400&bkg=white`;
+    const chartUrl = `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(chartConfig))}&w=1000&h=500&bkg=white`;
     
     try {
         const response = await axios({ url: chartUrl, responseType: 'arraybuffer' });

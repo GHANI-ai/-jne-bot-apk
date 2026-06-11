@@ -327,12 +327,12 @@ async function connectToWhatsApp() {
             let actualCourierId = param ? (nameToIdMap[param] || param) : null;
             
             if (isPeforma) {
-                if (!actualCourierId || actualCourierId === "SEMUA") {
-                    await sock.sendMessage(chatId, { text: "⚠️ Masukkan ID kurir spesifik untuk melihat peforma (misal: `/peforma PKU1151`)." });
+                if (!actualCourierId) {
+                    await sock.sendMessage(chatId, { text: "⚠️ Masukkan ID kurir spesifik atau 'semua' untuk melihat peforma (misal: `/peforma PKU1151` atau `/peforma semua`)." });
                     return;
                 }
                 
-                await sock.sendMessage(chatId, { text: `⏳ *Memproses Laporan Peforma H+* untuk kurir *${actualCourierId}*...\nBot sedang mengambil data 10 hari terakhir, mohon tunggu.` }, { quoted: msg });
+                await sock.sendMessage(chatId, { text: `⏳ *Memproses Laporan Peforma H+* untuk *${actualCourierId}*...\nBot sedang mengambil jutaan data 10 hari terakhir, mohon tunggu beberapa detik.` }, { quoted: msg });
                 
                 await new Promise(res => exec(`node peforma.js ${actualCourierId}`, {cwd: path.join(__dirname)}, (err) => res()));
                 
